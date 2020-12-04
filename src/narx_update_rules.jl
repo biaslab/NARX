@@ -1,7 +1,7 @@
 import LinearAlgebra: I, Hermitian, tr, inv
 import ForneyLab: unsafeCov, unsafeMean, unsafePrecision, VariateType,
 				  collectNaiveVariationalNodeInbounds, assembleClamp!, ultimatePartner
-using Zygote
+# using Zygote
 include("util.jl")
 
 export ruleVariationalNARXOutNPPPPP,
@@ -12,11 +12,11 @@ export ruleVariationalNARXOutNPPPPP,
 	   ruleVariationalNARXIn5PPPPPN
 
 # Autoregression orders
-order_out = Nothing
-order_inp = Nothing
+order_out = 0
+order_inp = 0
 
 # Approximating point for Taylor series
-approxθ = 0.0
+# approxθ = 0.0
 
 function defineOrder(M::Int64, N::Int64)
 	global order_out, order_inp, approxθ
@@ -30,9 +30,9 @@ end
 function ruleVariationalNARXOutNPPPPP(g :: Function,
 									  marg_y :: Nothing,
 									  marg_θ :: ProbabilityDistribution{Multivariate},
-                                      marg_x :: ProbabilityDistribution{Multivariate},
+									  marg_x :: ProbabilityDistribution{Multivariate},
+									  marg_u :: ProbabilityDistribution{Univariate},
                                       marg_z :: ProbabilityDistribution{Multivariate},
-                                      marg_u :: ProbabilityDistribution{Univariate},
                                       marg_τ :: ProbabilityDistribution{Univariate})
 
 	# Extract moments of beliefs
@@ -41,18 +41,17 @@ function ruleVariationalNARXOutNPPPPP(g :: Function,
 	mz = unsafeMean(marg_z)
 	mu = unsafeMean(marg_u)
 	mτ = unsafeMean(marg_τ)
-	Vθ = unsafeCov(marg_θ)
 
-	# Set order
-	M = dims(marg_x)
-	N = dims(marg_z)
-	defineOrder(M,N)
+	# # Set order
+	# M = dims(marg_x)
+	# N = dims(marg_z)
+	# defineOrder(M,N)
 
-	# Update approximating point
-	global approxθ = mθ
+	# # Update approximating point
+	# global approxθ = mθ
 
 	# Evaluate f at mθ
-	fθ = g(mθ, mx, mu, mz)
+	fθ = mθ'*g([mx; mu; mz])
 
 	# Set outgoing message
 	return Message(Univariate, GaussianMeanPrecision, m=fθ, w=mτ)
@@ -62,31 +61,32 @@ function ruleVariationalNARXIn1PNPPPP(g :: Function,
 									  marg_y :: ProbabilityDistribution{Univariate},
                                       marg_θ :: Nothing,
 									  marg_x :: ProbabilityDistribution{Multivariate},
+									  marg_u :: ProbabilityDistribution{Univariate},
                                       marg_z :: ProbabilityDistribution{Multivariate},
-                                      marg_u :: ProbabilityDistribution{Univariate},
                                       marg_τ :: ProbabilityDistribution{Univariate})
 
     # Extract moments of beliefs
 	my = unsafeMean(marg_y)
 	mx = unsafeMean(marg_x)
-	mz = unsafeMean(marg_z)
 	mu = unsafeMean(marg_u)
+	mz = unsafeMean(marg_z)
 	mτ = unsafeMean(marg_τ)
 
-	# Set order
-	M = dims(marg_x)
-	N = dims(marg_z)
-	defineOrder(M,N)
+	# # Set order	
+	# M = dims(marg_x)
+	# N = dims(marg_z)
+	# defineOrder(M,N)
 
 	# Jacobian of f evaluated at mθ
-	Jθ = Zygote.gradient(g, approxθ, mx, mu, mz)[1]
+	# Jθ = Zygote.gradient(g, approxθ, mx, mu, mz)[1]
+	Jθ = g([mx; mu; mz])
 
 	# Update parameters
 	Φ = mτ*Jθ*Jθ'
 	ϕ = mτ*my*Jθ
 
-	# Update approximating point
-	global approxθ = inv(Φ + 1e-8*Matrix{Float64}(I, size(Φ)))*ϕ
+	# # Update approximating point
+	# global approxθ = inv(Φ + 1e-8*Matrix{Float64}(I, size(Φ)))*ϕ
 
 	# Set message
     return Message(Multivariate, GaussianWeightedMeanPrecision, xi=ϕ, w=Φ)
@@ -96,8 +96,8 @@ function ruleVariationalNARXIn2PPNPPP(g :: Function,
 									  marg_y :: ProbabilityDistribution{Univariate},
 									  marg_θ :: ProbabilityDistribution{Multivariate},
 									  marg_x :: Nothing,
+									  marg_u :: ProbabilityDistribution{Univariate},
 							  	      marg_z :: ProbabilityDistribution{Multivariate},
-								      marg_u :: ProbabilityDistribution{Univariate},
                                       marg_τ :: ProbabilityDistribution{Univariate})
 
 	error("Output history vector should be observed.")
@@ -108,11 +108,11 @@ function ruleVariationalNARXIn3PPPNPP(g :: Function,
 									  marg_y :: ProbabilityDistribution{Univariate},
 									  marg_θ :: ProbabilityDistribution{Multivariate},
 									  marg_x :: ProbabilityDistribution{Multivariate},
-							  	      marg_z :: Nothing,
-								      marg_u :: ProbabilityDistribution{Univariate},
+									  marg_u :: Nothing,
+							  	      marg_z :: ProbabilityDistribution{Multivariate},
                                       marg_τ :: ProbabilityDistribution{Univariate})
 
-	error("Input history vector should be observed.")
+	error("Current input should be observed.")
     return Message(vague(GaussianWeightedMeanPrecision, 2))
 end
 
@@ -120,11 +120,11 @@ function ruleVariationalNARXIn4PPPPNP(g :: Function,
 									  marg_y :: ProbabilityDistribution{Univariate},
 									  marg_θ :: ProbabilityDistribution{Multivariate},
 									  marg_x :: ProbabilityDistribution{Multivariate},
-							  	      marg_z :: ProbabilityDistribution{Multivariate},
-								      marg_u :: Nothing,
+									  marg_u :: ProbabilityDistribution{Univariate},
+							  	      marg_z :: Nothing,
                                       marg_τ :: ProbabilityDistribution{Univariate})
 
-	error("Current input should be observed.")
+	error("Input history vector should be observed.")
     return Message(vague(GaussianWeightedMeanPrecision))
 end
 
@@ -132,8 +132,8 @@ function ruleVariationalNARXIn5PPPPPN(g :: Function,
 									  marg_y :: ProbabilityDistribution{Univariate},
 									  marg_θ :: ProbabilityDistribution{Multivariate},
 									  marg_x :: ProbabilityDistribution{Multivariate},
+									  marg_u :: ProbabilityDistribution{Univariate},
 							  	      marg_z :: ProbabilityDistribution{Multivariate},
-								      marg_u :: ProbabilityDistribution{Univariate},
                                       marg_τ :: Nothing)
 
     # Extract moments of beliefs
@@ -145,18 +145,20 @@ function ruleVariationalNARXIn5PPPPPN(g :: Function,
 	Vθ = unsafeCov(marg_θ)
 
 	# Set order
-	M = dims(marg_x)
-	N = dims(marg_z)
-	defineOrder(M,N)
+	# M = dims(marg_x)
+	# N = dims(marg_z)
+	# defineOrder(M,N)
 
-	# Update approximating point
-	global approxθ = mθ
+	# # Update approximating point
+	# global approxθ = mθ
 
 	# Evaluate f at mθ
-	fθ = g(mθ, mx, mu, mz)
+	g_ = g([mx; mu; mz])
+	fθ = mθ'*g_
 
 	# Gradient of f evaluated at mθ
-	Jθ = Zygote.gradient(g, mθ, mx, mu, mz)[1]
+	# Jθ = Zygote.gradient(g, mθ, mx, mu, mz)[1]
+	Jθ = g_
 
 	# Update parameters
 	a = 3/2.
