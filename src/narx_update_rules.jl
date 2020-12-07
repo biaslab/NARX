@@ -1,7 +1,6 @@
 import LinearAlgebra: I, Hermitian, tr, inv
 import ForneyLab: unsafeCov, unsafeMean, unsafePrecision, VariateType,
 				  collectNaiveVariationalNodeInbounds, assembleClamp!, ultimatePartner
-# using Zygote
 include("util.jl")
 
 export ruleVariationalNARXOutNPPPPP,
@@ -10,21 +9,6 @@ export ruleVariationalNARXOutNPPPPP,
        ruleVariationalNARXIn3PPPNPP,
 	   ruleVariationalNARXIn4PPPPNP,
 	   ruleVariationalNARXIn5PPPPPN
-
-# Autoregression orders
-order_out = 0
-order_inp = 0
-
-# Approximating point for Taylor series
-# approxθ = 0.0
-
-function defineOrder(M::Int64, N::Int64)
-	global order_out, order_inp, approxθ
-
-	# Autoregression order
-    order_out = M
-	order_inp = N
-end
 
 
 function ruleVariationalNARXOutNPPPPP(g :: Function,
@@ -41,14 +25,6 @@ function ruleVariationalNARXOutNPPPPP(g :: Function,
 	mz = unsafeMean(marg_z)
 	mu = unsafeMean(marg_u)
 	mτ = unsafeMean(marg_τ)
-
-	# # Set order
-	# M = dims(marg_x)
-	# N = dims(marg_z)
-	# defineOrder(M,N)
-
-	# # Update approximating point
-	# global approxθ = mθ
 
 	# Evaluate f at mθ
 	fθ = mθ'*g([mx; mu; mz])
@@ -72,21 +48,12 @@ function ruleVariationalNARXIn1PNPPPP(g :: Function,
 	mz = unsafeMean(marg_z)
 	mτ = unsafeMean(marg_τ)
 
-	# # Set order	
-	# M = dims(marg_x)
-	# N = dims(marg_z)
-	# defineOrder(M,N)
-
-	# Jacobian of f evaluated at mθ
-	# Jθ = Zygote.gradient(g, approxθ, mx, mu, mz)[1]
+	# Jacobian of f w.r.t. θ
 	Jθ = g([mx; mu; mz])
 
 	# Update parameters
 	Φ = mτ*Jθ*Jθ'
 	ϕ = mτ*my*Jθ
-
-	# # Update approximating point
-	# global approxθ = inv(Φ + 1e-8*Matrix{Float64}(I, size(Φ)))*ϕ
 
 	# Set message
     return Message(Multivariate, GaussianWeightedMeanPrecision, xi=ϕ, w=Φ)
@@ -144,21 +111,11 @@ function ruleVariationalNARXIn5PPPPPN(g :: Function,
 	mu = unsafeMean(marg_u)
 	Vθ = unsafeCov(marg_θ)
 
-	# Set order
-	# M = dims(marg_x)
-	# N = dims(marg_z)
-	# defineOrder(M,N)
+	# Jacobian of f w.r.t. θ
+	Jθ = g([mx; mu; mz])
 
-	# # Update approximating point
-	# global approxθ = mθ
-
-	# Evaluate f at mθ
-	g_ = g([mx; mu; mz])
-	fθ = mθ'*g_
-
-	# Gradient of f evaluated at mθ
-	# Jθ = Zygote.gradient(g, mθ, mx, mu, mz)[1]
-	Jθ = g_
+	# Auto-regression function
+	fθ = mθ'*Jθ
 
 	# Update parameters
 	a = 3/2.
