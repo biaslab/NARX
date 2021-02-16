@@ -2,6 +2,11 @@
 
 using Zygote
 
+function cholinv(M::AbstractMatrix)
+    return LinearAlgebra.inv(M + 1e-8*Matrix{Float64}(I,size(M)))
+    # return LinearAlgebra.inv(M)
+end
+
 function wMatrix(γ, order)
     mW = huge*Matrix{Float64}(I, order, order)
     mW[1, 1] = γ
